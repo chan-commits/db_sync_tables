@@ -21,18 +21,76 @@ uv run --no-sync python sync_table.py
 
 ## 配置说明
 
+`db_config.py` 是运行时配置文件。下面是主要字段示例。
+
+```python
+DEBUG = True
+
+SOURCE_DB = {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "source_user",
+    "password": "source_password",
+    "database": "source_database",
+    "charset": "utf8mb4",
+}
+
+TARGET_DB = {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "target_user",
+    "password": "target_password",
+    "database": "target_database",
+    "charset": "utf8mb4",
+}
+
+SOURCE_TABLE = "source_table"
+TARGET_TABLE = "target_table"
+
+COLUMN_MAPPING = [
+    ("id", "id"),
+]
+
+MATCH_COLUMN_MAPPING = [
+    ("id", "id"),
+]
+
+SOURCE_COMPARE_TIME_FIELD = "change_time"
+TARGET_COMPARE_TIME_FIELD = "change_time"
+
+SOURCE_CREATE_TIME_FIELD = "create_time"
+TARGET_CREATE_TIME_FIELD = "create_time"
+SOURCE_CHANGE_TIME_FIELD = "change_time"
+TARGET_CHANGE_TIME_FIELD = "change_time"
+
+TIME_FILTER_MODE = "change_time"
+TIME_START = "2026-01-01 00:00:00"
+TIME_END = "2026-02-01 00:00:00"
+
+EXTRA_WHERE_SQL = ""
+EXTRA_WHERE_PARAMS = ()
+
+USE_UPSERT = True
+UPSERT_UPDATE_COLUMNS = []
+BATCH_SIZE = 5
+SLEEP_SECONDS = 5
+```
+
+字段说明：
+
+- `DEBUG = True`：只打印 SQL，不执行。
 - `SOURCE_DB`：源数据库连接，建议只读权限。
 - `TARGET_DB`：目标数据库连接，建议读写权限。
-- `SOURCE_TABLE` / `TARGET_TABLE`：源表和目标表名称。
-- `COLUMN_MAPPING`：需要从源表同步到目标表的字段映射。
+- `COLUMN_MAPPING`：从源表同步到目标表的字段映射。
 - `MATCH_COLUMN_MAPPING`：用于判断同一条记录的匹配字段。
 - `SOURCE_COMPARE_TIME_FIELD` / `TARGET_COMPARE_TIME_FIELD`：时间比较字段。
 - 如果目标时间 `>=` 源时间，则跳过该条数据，不做任何操作。
-- `BATCH_SIZE`：每批处理条数，默认 `5`。
-- `SLEEP_SECONDS`：每批之间的休眠秒数，默认 `5`。
-- `TIME_FILTER_MODE`：
-  - `change_time`：按源表变更时间筛选。
-  - `create_or_change`：按源表创建时间或变更时间筛选。
+- `SOURCE_CREATE_TIME_FIELD` / `TARGET_CREATE_TIME_FIELD` 和
+  `SOURCE_CHANGE_TIME_FIELD` / `TARGET_CHANGE_TIME_FIELD` 可以按实际字段名自定义。
+- `TIME_FILTER_MODE = "change_time"`：按源表变更时间筛选。
+- `TIME_FILTER_MODE = "create_or_change"`：按源表创建时间或变更时间筛选。
+- `BATCH_SIZE` 默认 `5`。
+- `SLEEP_SECONDS` 默认 `5`。
 
 ## 文件说明
 
