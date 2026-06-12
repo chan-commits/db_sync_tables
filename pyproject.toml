@@ -3,7 +3,7 @@ name = "db-sync-tables"
 version = "0.1.0"
 description = "Sync rows from a source MySQL database table into a target MySQL database table."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
     "pymysql>=1.1.1",
 ]
