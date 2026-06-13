@@ -17,6 +17,8 @@ from types import ModuleType
 
 import pymysql
 
+_MISSING = object()
+
 
 def quote_ident(name: str) -> str:
     return f"`{name.replace('`', '``')}`"
@@ -54,10 +56,10 @@ def load_config(config_path: str) -> ModuleType:
     return module
 
 
-def get_value(config: object, name: str, default: object | None = None) -> object:
+def get_value(config: object, name: str, default: object = _MISSING) -> object:
     if hasattr(config, name):
         return getattr(config, name)
-    if default is not None:
+    if default is not _MISSING:
         return default
     raise AttributeError(f"Missing required config value: {name}")
 
@@ -83,19 +85,28 @@ def build_time_where_clause(config: object) -> tuple[str, list[object]]:
     clauses: list[str] = []
     params: list[object] = []
 
-    time_filter_mode = get_value(config, "TIME_FILTER_MODE")
+    time_filter_mode = get_value(config, "TIME_FILTER_MODE", None)
     time_start = get_value(config, "TIME_START", None)
     time_end = get_value(config, "TIME_END", None)
-    source_create_time_field = get_value(config, "SOURCE_CREATE_TIME_FIELD")
-    source_change_time_field = get_value(config, "SOURCE_CHANGE_TIME_FIELD")
+    source_create_time_field = get_value(config, "SOURCE_CREATE_TIME_FIELD", None)
+    source_change_time_field = get_value(config, "SOURCE_CHANGE_TIME_FIELD", None)
     extra_where_sql = get_value(config, "EXTRA_WHERE_SQL", "")
     extra_where_params = tuple(get_value(config, "EXTRA_WHERE_PARAMS", ()))
 
-    if time_filter_mode == "change_time":
+    if time_filter_mode in (None, ""):
+        pass
+    elif time_filter_mode == "change_time":
+        if source_change_time_field in (None, ""):
+            raise ValueError("SOURCE_CHANGE_TIME_FIELD is required when TIME_FILTER_MODE = 'change_time'.")
         clause, clause_params = build_range_clause(source_change_time_field, time_start, time_end)
         clauses.append(clause)
         params.extend(clause_params)
     elif time_filter_mode == "create_or_change":
+        if source_create_time_field in (None, "") or source_change_time_field in (None, ""):
+            raise ValueError(
+                "SOURCE_CREATE_TIME_FIELD and SOURCE_CHANGE_TIME_FIELD are required when "
+                "TIME_FILTER_MODE = 'create_or_change'."
+            )
         create_clause, create_params = build_range_clause(source_create_time_field, time_start, time_end)
         change_clause, change_params = build_range_clause(source_change_time_field, time_start, time_end)
         clauses.append(f"({create_clause} OR {change_clause})")

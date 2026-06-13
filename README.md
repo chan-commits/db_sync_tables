@@ -107,16 +107,21 @@ Field notes:
   - `create_time` is usually the original creation timestamp
   - `change_time` is usually the last modified timestamp
   - `TIME_FILTER_MODE` decides which source timestamp is used to fetch rows
-- `TIME_FILTER_MODE = "change_time"` filters by the source change time.
-- `TIME_FILTER_MODE = "create_or_change"` filters by source create time or
-  source change time.
-- `TIME_START` and `TIME_END` define the time window for the source query.
+- `TIME_FILTER_MODE`, `TIME_START`, and `TIME_END` are optional.
+- If you do not need a built-in time window, leave all three as `None` and use
+  `EXTRA_WHERE_SQL` / `EXTRA_WHERE_PARAMS` instead.
+- If `TIME_FILTER_MODE = "change_time"`, the source query filters by the
+  source change time field.
+- If `TIME_FILTER_MODE = "create_or_change"`, the source query filters by the
+  source create time field or source change time field.
 - `EXTRA_WHERE_SQL` and `EXTRA_WHERE_PARAMS` add extra source-side filters.
 - `USE_UPSERT = True` uses `INSERT ... ON DUPLICATE KEY UPDATE` when a row
   needs to be written.
 - `UPSERT_UPDATE_COLUMNS` limits which columns are refreshed during upsert.
 - `BATCH_SIZE` defaults to `5`.
 - `SLEEP_SECONDS` defaults to `5`.
+- If you want to rely only on your own `EXTRA_WHERE_SQL`, set `TIME_FILTER_MODE`,
+  `TIME_START`, and `TIME_END` to `None`.
 
 ## Real-World Example
 

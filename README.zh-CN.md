@@ -101,14 +101,18 @@ SLEEP_SECONDS = 5
   - `create_time` 通常表示创建时间
   - `change_time` 通常表示最后更新时间
   - `TIME_FILTER_MODE` 决定源表查询时使用哪个时间字段
-- `TIME_FILTER_MODE = "change_time"`：按源表变更时间筛选。
-- `TIME_FILTER_MODE = "create_or_change"`：按源表创建时间或变更时间筛选。
-- `TIME_START` / `TIME_END`：源表查询的时间范围。
+- `TIME_FILTER_MODE` / `TIME_START` / `TIME_END`：可选。
+- 如果你不需要内置时间窗口，就把这三个都留空（`None`），直接用
+  `EXTRA_WHERE_SQL` / `EXTRA_WHERE_PARAMS` 即可。
+- 如果 `TIME_FILTER_MODE = "change_time"`，则按源表变更时间筛选。
+- 如果 `TIME_FILTER_MODE = "create_or_change"`，则按源表创建时间或变更时间筛选。
 - `EXTRA_WHERE_SQL` / `EXTRA_WHERE_PARAMS`：额外的源表筛选条件。
 - `USE_UPSERT = True`：当需要写入时，使用 `INSERT ... ON DUPLICATE KEY UPDATE`。
 - `UPSERT_UPDATE_COLUMNS`：限制 upsert 时实际刷新的字段。
 - `BATCH_SIZE` 默认 `5`。
 - `SLEEP_SECONDS` 默认 `5`。
+- 如果你只想依赖自己的 `EXTRA_WHERE_SQL`，就把 `TIME_FILTER_MODE`、
+  `TIME_START`、`TIME_END` 都设为 `None`。
 
 ## 真实场景示例
 

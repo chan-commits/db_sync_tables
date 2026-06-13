@@ -77,15 +77,17 @@ TARGET_CREATE_TIME_FIELD = "create_time"
 SOURCE_CHANGE_TIME_FIELD = "change_time"
 TARGET_CHANGE_TIME_FIELD = "change_time"
 
-# Query mode:
-# - "change_time": filter by the source change-time field only.
-# - "create_or_change": filter by either source create-time or change-time.
-TIME_FILTER_MODE = "change_time"
+# Optional source-side time filter.
+# Leave these as None if you only want to rely on EXTRA_WHERE_SQL.
+# If you set TIME_FILTER_MODE, then:
+# - "change_time" uses SOURCE_CHANGE_TIME_FIELD
+# - "create_or_change" uses SOURCE_CREATE_TIME_FIELD OR SOURCE_CHANGE_TIME_FIELD
+TIME_FILTER_MODE = None
 
-# Time window used by the WHERE clause.
-# Leave one side as None if you only want a lower or upper bound.
-TIME_START = "2026-01-01 00:00:00"
-TIME_END = "2026-02-01 00:00:00"
+# Time window used by the optional source time filter.
+# Leave these as None when TIME_FILTER_MODE is None.
+TIME_START = None
+TIME_END = None
 
 # Extra WHERE clause that will be appended to the time filter.
 # Example:
