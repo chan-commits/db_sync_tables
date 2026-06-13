@@ -112,6 +112,94 @@ Field notes:
 - `BATCH_SIZE` defaults to `5`.
 - `SLEEP_SECONDS` defaults to `5`.
 
+## Real-World Example
+
+Scenario:
+
+- Source DB: `crm_readonly`
+- Target DB: `crm_rw`
+- Source table: `customer_profile`
+- Target table: `customer_profile_sync`
+- Same row is identified by `customer_id`
+- Business fields include `name`, `phone`, and `status`
+- Source has `created_at` and `updated_at`
+- Target has the same fields
+- Only rows updated in January 2026 should be synced
+
+Example config:
+
+```python
+DEBUG = True
+
+SOURCE_DB = {
+    "host": "10.0.0.21",
+    "port": 3306,
+    "user": "crm_ro",
+    "password": "ro_password",
+    "database": "crm_readonly",
+    "charset": "utf8mb4",
+}
+
+TARGET_DB = {
+    "host": "10.0.0.22",
+    "port": 3306,
+    "user": "crm_rw",
+    "password": "rw_password",
+    "database": "crm_rw",
+    "charset": "utf8mb4",
+}
+
+SOURCE_TABLE = "customer_profile"
+TARGET_TABLE = "customer_profile_sync"
+
+COLUMN_MAPPING = [
+    ("customer_id", "customer_id"),
+    ("name", "name"),
+    ("phone", "phone"),
+    ("status", "status"),
+    ("created_at", "created_at"),
+    ("updated_at", "updated_at"),
+]
+
+MATCH_COLUMN_MAPPING = [
+    ("customer_id", "customer_id"),
+]
+
+SOURCE_COMPARE_TIME_FIELD = "updated_at"
+TARGET_COMPARE_TIME_FIELD = "updated_at"
+
+SOURCE_CREATE_TIME_FIELD = "created_at"
+TARGET_CREATE_TIME_FIELD = "created_at"
+SOURCE_CHANGE_TIME_FIELD = "updated_at"
+TARGET_CHANGE_TIME_FIELD = "updated_at"
+
+TIME_FILTER_MODE = "change_time"
+TIME_START = "2026-01-01 00:00:00"
+TIME_END = "2026-02-01 00:00:00"
+
+EXTRA_WHERE_SQL = "`status` IN (%s, %s)"
+EXTRA_WHERE_PARAMS = ("paid", "shipped")
+
+USE_UPSERT = False
+UPSERT_UPDATE_COLUMNS = []
+BATCH_SIZE = 5
+SLEEP_SECONDS = 5
+```
+
+How this example works:
+
+- `MATCH_COLUMN_MAPPING = [("customer_id", "customer_id")]` means both tables
+  use `customer_id` to identify the same record.
+- If a target row with the same `customer_id` does not exist, the row is inserted.
+- If the row exists and `target.updated_at < source.updated_at`, the row is updated.
+- If `target.updated_at >= source.updated_at`, the row is skipped.
+- `TIME_FILTER_MODE = "change_time"` means the source query uses `updated_at`
+  to find rows in the selected time window.
+- `SOURCE_CREATE_TIME_FIELD` and `SOURCE_CHANGE_TIME_FIELD` help the script
+  understand which source fields are creation and modification timestamps.
+- `TARGET_CREATE_TIME_FIELD` and `TARGET_CHANGE_TIME_FIELD` let the same
+  timestamp logic work even if the target table uses different column names.
+
 ## Files
 
 - `db_config.py`: all editable settings with inline comments.

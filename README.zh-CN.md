@@ -104,6 +104,95 @@ SLEEP_SECONDS = 5
 - `BATCH_SIZE` 默认 `5`。
 - `SLEEP_SECONDS` 默认 `5`。
 
+## 真实场景示例
+
+场景：
+
+- 源数据库：`crm_readonly`
+- 目标数据库：`crm_rw`
+- 源表：`customer_profile`
+- 目标表：`customer_profile_sync`
+- 使用 `customer_id` 判断是否为同一条数据
+- 业务字段包括 `name`、`phone`、`status`
+- 源表有 `created_at` 和 `updated_at`
+- 目标表也有同样字段
+- 只同步 2026 年 1 月更新过的数据
+
+示例配置：
+
+```python
+DEBUG = True
+
+SOURCE_DB = {
+    "host": "10.0.0.21",
+    "port": 3306,
+    "user": "crm_ro",
+    "password": "ro_password",
+    "database": "crm_readonly",
+    "charset": "utf8mb4",
+}
+
+TARGET_DB = {
+    "host": "10.0.0.22",
+    "port": 3306,
+    "user": "crm_rw",
+    "password": "rw_password",
+    "database": "crm_rw",
+    "charset": "utf8mb4",
+}
+
+SOURCE_TABLE = "customer_profile"
+TARGET_TABLE = "customer_profile_sync"
+
+COLUMN_MAPPING = [
+    ("customer_id", "customer_id"),
+    ("name", "name"),
+    ("phone", "phone"),
+    ("status", "status"),
+    ("created_at", "created_at"),
+    ("updated_at", "updated_at"),
+]
+
+MATCH_COLUMN_MAPPING = [
+    ("customer_id", "customer_id"),
+]
+
+SOURCE_COMPARE_TIME_FIELD = "updated_at"
+TARGET_COMPARE_TIME_FIELD = "updated_at"
+
+SOURCE_CREATE_TIME_FIELD = "created_at"
+TARGET_CREATE_TIME_FIELD = "created_at"
+SOURCE_CHANGE_TIME_FIELD = "updated_at"
+TARGET_CHANGE_TIME_FIELD = "updated_at"
+
+TIME_FILTER_MODE = "change_time"
+TIME_START = "2026-01-01 00:00:00"
+TIME_END = "2026-02-01 00:00:00"
+
+EXTRA_WHERE_SQL = "`status` IN (%s, %s)"
+EXTRA_WHERE_PARAMS = ("paid", "shipped")
+
+USE_UPSERT = False
+UPSERT_UPDATE_COLUMNS = []
+BATCH_SIZE = 5
+SLEEP_SECONDS = 5
+```
+
+这个示例的含义：
+
+- `MATCH_COLUMN_MAPPING = [("order_id", "order_id")]` 表示两边都用
+- `MATCH_COLUMN_MAPPING = [("customer_id", "customer_id")]` 表示两边都用
+  `customer_id` 识别同一条数据。
+- 如果目标表里没有相同 `customer_id` 的记录，就插入。
+- 如果记录存在，并且 `目标.updated_at < 源.updated_at`，就更新。
+- 如果 `目标.updated_at >= 源.updated_at`，就跳过。
+- `TIME_FILTER_MODE = "change_time"` 表示源表筛选时使用 `updated_at`
+  来取指定时间范围内的数据。
+- `SOURCE_CREATE_TIME_FIELD` 和 `SOURCE_CHANGE_TIME_FIELD` 用来说明源表
+  哪个字段是创建时间、哪个字段是更新时间。
+- `TARGET_CREATE_TIME_FIELD` 和 `TARGET_CHANGE_TIME_FIELD` 允许目标表
+  使用不同字段名时仍然复用同一套逻辑。
+
 ## 文件说明
 
 - `db_config.py`：所有可填写配置，带注释。
