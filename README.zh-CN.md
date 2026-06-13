@@ -83,12 +83,24 @@ SLEEP_SECONDS = 5
 - `TARGET_DB`：目标数据库连接，建议读写权限。
 - `COLUMN_MAPPING`：从源表同步到目标表的字段映射。
 - `MATCH_COLUMN_MAPPING`：用于判断同一条记录的匹配字段。
-- `SOURCE_COMPARE_TIME_FIELD` / `TARGET_COMPARE_TIME_FIELD`：时间比较字段。
-- 如果目标时间 `>=` 源时间，则跳过该条数据，不做任何操作。
+  如果源表和目标表字段名一样，直接写成相同的配对，例如 `("id", "id")`。
+- 同步判定流程：
+  - 如果目标表没有这条记录，直接插入
+  - 如果目标表有这条记录，并且目标时间戳小于源时间戳，执行更新
+  - 如果目标时间戳大于等于源时间戳，则跳过
+- `SOURCE_COMPARE_TIME_FIELD` / `TARGET_COMPARE_TIME_FIELD`：用于插入/更新/跳过判断的时间字段。
 - `SOURCE_CREATE_TIME_FIELD` / `TARGET_CREATE_TIME_FIELD` 和
-  `SOURCE_CHANGE_TIME_FIELD` / `TARGET_CHANGE_TIME_FIELD` 可以按实际字段名自定义。
+  `SOURCE_CHANGE_TIME_FIELD` / `TARGET_CHANGE_TIME_FIELD`：用于源表筛选和自动映射，可以按实际字段名自定义。
+- 为什么会有多个 TIME_FIELD：
+  - `create_time` 通常表示创建时间
+  - `change_time` 通常表示最后更新时间
+  - `TIME_FILTER_MODE` 决定源表查询时使用哪个时间字段
 - `TIME_FILTER_MODE = "change_time"`：按源表变更时间筛选。
 - `TIME_FILTER_MODE = "create_or_change"`：按源表创建时间或变更时间筛选。
+- `TIME_START` / `TIME_END`：源表查询的时间范围。
+- `EXTRA_WHERE_SQL` / `EXTRA_WHERE_PARAMS`：额外的源表筛选条件。
+- `USE_UPSERT = True`：当需要写入时，使用 `INSERT ... ON DUPLICATE KEY UPDATE`。
+- `UPSERT_UPDATE_COLUMNS`：限制 upsert 时实际刷新的字段。
 - `BATCH_SIZE` 默认 `5`。
 - `SLEEP_SECONDS` 默认 `5`。
 

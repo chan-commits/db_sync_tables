@@ -83,16 +83,32 @@ Field notes:
 - `TARGET_DB` should have read/write permission.
 - `COLUMN_MAPPING` defines which columns are copied from source to target.
 - `MATCH_COLUMN_MAPPING` defines how a source row matches a target row.
-- `SOURCE_COMPARE_TIME_FIELD` and `TARGET_COMPARE_TIME_FIELD` control the
-  skip rule.
-- If the target timestamp is greater than or equal to the source timestamp,
-  the row is skipped.
+  If the column names are the same on both sides, write them the same way,
+  for example `("id", "id")`.
+- Sync decision:
+  - if the target row does not exist, insert it
+  - if the target row exists and the target timestamp is older than the
+    source timestamp, update it
+  - if the target timestamp is greater than or equal to the source timestamp,
+    skip it
+- `SOURCE_COMPARE_TIME_FIELD` and `TARGET_COMPARE_TIME_FIELD` are the fields
+  used for the insert/update/skip comparison.
 - `SOURCE_CREATE_TIME_FIELD` / `TARGET_CREATE_TIME_FIELD` and
-  `SOURCE_CHANGE_TIME_FIELD` / `TARGET_CHANGE_TIME_FIELD` can be customized
-  when the timestamp columns use different names.
+  `SOURCE_CHANGE_TIME_FIELD` / `TARGET_CHANGE_TIME_FIELD` are the field names
+  used by the source filter and auto-mapping logic. They can be different from
+  the actual column names in your tables.
+- Why there are multiple time fields:
+  - `create_time` is usually the original creation timestamp
+  - `change_time` is usually the last modified timestamp
+  - `TIME_FILTER_MODE` decides which source timestamp is used to fetch rows
 - `TIME_FILTER_MODE = "change_time"` filters by the source change time.
 - `TIME_FILTER_MODE = "create_or_change"` filters by source create time or
   source change time.
+- `TIME_START` and `TIME_END` define the time window for the source query.
+- `EXTRA_WHERE_SQL` and `EXTRA_WHERE_PARAMS` add extra source-side filters.
+- `USE_UPSERT = True` uses `INSERT ... ON DUPLICATE KEY UPDATE` when a row
+  needs to be written.
+- `UPSERT_UPDATE_COLUMNS` limits which columns are refreshed during upsert.
 - `BATCH_SIZE` defaults to `5`.
 - `SLEEP_SECONDS` defaults to `5`.
 

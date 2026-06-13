@@ -52,6 +52,8 @@ COLUMN_MAPPING = [
 # MATCH_COLUMN_MAPPING = [
 #     ("id", "id"),
 # ]
+# If source and target column names are identical, keep the same pair on both
+# sides. If they are different, map source column -> target column.
 MATCH_COLUMN_MAPPING = [
     ("id", "id"),
 ]
@@ -59,16 +61,19 @@ MATCH_COLUMN_MAPPING = [
 # Source/target timestamp field names used for comparison.
 # If the target row time is greater than or equal to the source row time,
 # the script skips that row.
+# This field decides insert vs update vs skip for an already matched row.
 SOURCE_COMPARE_TIME_FIELD = "change_time"
 TARGET_COMPARE_TIME_FIELD = "change_time"
 
-# Optional create-time field names. These are added into the sync mapping
-# automatically when they are not already listed in COLUMN_MAPPING.
+# Optional create-time field names.
+# These are used by source filtering and may be auto-added to the sync mapping
+# when they are not already listed in COLUMN_MAPPING.
 SOURCE_CREATE_TIME_FIELD = "create_time"
 TARGET_CREATE_TIME_FIELD = "create_time"
 
-# Optional change-time field names. These are added into the sync mapping
-# automatically when they are not already listed in COLUMN_MAPPING.
+# Optional change-time field names.
+# These are used by source filtering and may be auto-added to the sync mapping
+# when they are not already listed in COLUMN_MAPPING.
 SOURCE_CHANGE_TIME_FIELD = "change_time"
 TARGET_CHANGE_TIME_FIELD = "change_time"
 
