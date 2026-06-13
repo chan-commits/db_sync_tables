@@ -14,6 +14,12 @@ MySQL table sync tool using `uv` and `pymysql`.
 uv run --no-sync python sync_table.py
 ```
 
+Or run a different config file directly:
+
+```bash
+uv run --no-sync python sync_table.py --config /path/to/your_config.py
+```
+
 3. If you want uv to create or refresh the environment from `pyproject.toml`,
    run `uv sync` first, then run the script.
 4. Set `DEBUG = True` to print SQL templates only.

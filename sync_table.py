@@ -1,58 +1,65 @@
 """Sync rows from a source MySQL table into a target MySQL table.
 
 Usage:
-    uv run python sync_table.py
+    uv run --no-sync python sync_table.py
+    uv run --no-sync python sync_table.py --config /path/to/other_config.py
 """
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
+import importlib.util
 import time
 from contextlib import closing
+from pathlib import Path
+from types import ModuleType
 
 import pymysql
-
-from db_config import (
-    BATCH_SIZE,
-    COLUMN_MAPPING,
-    DEBUG,
-    EXTRA_WHERE_PARAMS,
-    EXTRA_WHERE_SQL,
-    MATCH_COLUMN_MAPPING,
-    SOURCE_CHANGE_TIME_FIELD,
-    SOURCE_COMPARE_TIME_FIELD,
-    SOURCE_CREATE_TIME_FIELD,
-    SOURCE_DB,
-    SOURCE_TABLE,
-    SLEEP_SECONDS,
-    TARGET_CHANGE_TIME_FIELD,
-    TARGET_COMPARE_TIME_FIELD,
-    TARGET_CREATE_TIME_FIELD,
-    TARGET_DB,
-    TARGET_TABLE,
-    TIME_END,
-    TIME_FILTER_MODE,
-    TIME_START,
-    UPSERT_UPDATE_COLUMNS,
-    USE_UPSERT,
-)
 
 
 def quote_ident(name: str) -> str:
     return f"`{name.replace('`', '``')}`"
 
 
-def connect_mysql(config: dict[str, object]) -> pymysql.connections.Connection:
+def connect_mysql(config: object) -> pymysql.connections.Connection:
+    if isinstance(config, dict):
+        getter = config.get
+    else:
+        getter = lambda key, default=None: getattr(config, key, default)
+
     return pymysql.connect(
-        host=config["host"],
-        port=config["port"],
-        user=config["user"],
-        password=config["password"],
-        database=config["database"],
-        charset=config.get("charset", "utf8mb4"),
+        host=getter("host"),
+        port=getter("port"),
+        user=getter("user"),
+        password=getter("password"),
+        database=getter("database"),
+        charset=getter("charset", "utf8mb4"),
         autocommit=False,
         cursorclass=pymysql.cursors.DictCursor,
     )
+
+
+def load_config(config_path: str) -> ModuleType:
+    path = Path(config_path).expanduser().resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
+
+    spec = importlib.util.spec_from_file_location("db_sync_runtime_config", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load config file: {path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def get_value(config: object, name: str, default: object | None = None) -> object:
+    if hasattr(config, name):
+        return getattr(config, name)
+    if default is not None:
+        return default
+    raise AttributeError(f"Missing required config value: {name}")
 
 
 def build_range_clause(field: str, start: object, end: object) -> tuple[str, list[object]]:
@@ -72,29 +79,37 @@ def build_range_clause(field: str, start: object, end: object) -> tuple[str, lis
     return " AND ".join(parts), params
 
 
-def build_time_where_clause() -> tuple[str, list[object]]:
+def build_time_where_clause(config: object) -> tuple[str, list[object]]:
     clauses: list[str] = []
     params: list[object] = []
 
-    if TIME_FILTER_MODE == "change_time":
-        clause, clause_params = build_range_clause(SOURCE_CHANGE_TIME_FIELD, TIME_START, TIME_END)
+    time_filter_mode = get_value(config, "TIME_FILTER_MODE")
+    time_start = get_value(config, "TIME_START", None)
+    time_end = get_value(config, "TIME_END", None)
+    source_create_time_field = get_value(config, "SOURCE_CREATE_TIME_FIELD")
+    source_change_time_field = get_value(config, "SOURCE_CHANGE_TIME_FIELD")
+    extra_where_sql = get_value(config, "EXTRA_WHERE_SQL", "")
+    extra_where_params = tuple(get_value(config, "EXTRA_WHERE_PARAMS", ()))
+
+    if time_filter_mode == "change_time":
+        clause, clause_params = build_range_clause(source_change_time_field, time_start, time_end)
         clauses.append(clause)
         params.extend(clause_params)
-    elif TIME_FILTER_MODE == "create_or_change":
-        create_clause, create_params = build_range_clause(SOURCE_CREATE_TIME_FIELD, TIME_START, TIME_END)
-        change_clause, change_params = build_range_clause(SOURCE_CHANGE_TIME_FIELD, TIME_START, TIME_END)
+    elif time_filter_mode == "create_or_change":
+        create_clause, create_params = build_range_clause(source_create_time_field, time_start, time_end)
+        change_clause, change_params = build_range_clause(source_change_time_field, time_start, time_end)
         clauses.append(f"({create_clause} OR {change_clause})")
         params.extend(create_params)
         params.extend(change_params)
     else:
         raise ValueError(
-            f"Unsupported TIME_FILTER_MODE: {TIME_FILTER_MODE!r}. "
+            f"Unsupported TIME_FILTER_MODE: {time_filter_mode!r}. "
             "Use 'change_time' or 'create_or_change'."
         )
 
-    if EXTRA_WHERE_SQL:
-        clauses.append(f"({EXTRA_WHERE_SQL})")
-        params.extend(EXTRA_WHERE_PARAMS)
+    if extra_where_sql:
+        clauses.append(f"({extra_where_sql})")
+        params.extend(extra_where_params)
 
     if not clauses:
         return "", []
@@ -123,20 +138,29 @@ def unique_mappings(*mapping_groups: list[tuple[str, str]]) -> list[tuple[str, s
     return merged
 
 
-def get_sync_column_mapping() -> list[tuple[str, str]]:
+def get_sync_column_mapping(config: object) -> list[tuple[str, str]]:
+    column_mapping = list(get_value(config, "COLUMN_MAPPING"))
+    match_column_mapping = list(get_value(config, "MATCH_COLUMN_MAPPING"))
+    source_create_time_field = get_value(config, "SOURCE_CREATE_TIME_FIELD")
+    target_create_time_field = get_value(config, "TARGET_CREATE_TIME_FIELD")
+    source_change_time_field = get_value(config, "SOURCE_CHANGE_TIME_FIELD")
+    target_change_time_field = get_value(config, "TARGET_CHANGE_TIME_FIELD")
+    source_compare_time_field = get_value(config, "SOURCE_COMPARE_TIME_FIELD")
+    target_compare_time_field = get_value(config, "TARGET_COMPARE_TIME_FIELD")
+
     auto_mappings = [
-        list(MATCH_COLUMN_MAPPING),
+        match_column_mapping,
         [
-            (SOURCE_CREATE_TIME_FIELD, TARGET_CREATE_TIME_FIELD),
-            (SOURCE_CHANGE_TIME_FIELD, TARGET_CHANGE_TIME_FIELD),
-            (SOURCE_COMPARE_TIME_FIELD, TARGET_COMPARE_TIME_FIELD),
+            (source_create_time_field, target_create_time_field),
+            (source_change_time_field, target_change_time_field),
+            (source_compare_time_field, target_compare_time_field),
         ],
     ]
-    return unique_mappings(list(COLUMN_MAPPING), *auto_mappings)
+    return unique_mappings(column_mapping, *auto_mappings)
 
 
-def build_source_select_sql() -> tuple[str, list[object], list[str]]:
-    sync_mapping = get_sync_column_mapping()
+def build_source_select_sql(config: object) -> tuple[str, list[object], list[str]]:
+    sync_mapping = get_sync_column_mapping(config)
     select_columns: list[str] = []
     alias_order: list[str] = []
 
@@ -147,58 +171,69 @@ def build_source_select_sql() -> tuple[str, list[object], list[str]]:
         else:
             select_columns.append(f"{quote_ident(source_column)} AS {quote_ident(target_column)}")
 
-    where_sql, params = build_time_where_clause()
+    where_sql, params = build_time_where_clause(config)
+    source_table = get_value(config, "SOURCE_TABLE")
+    source_compare_time_field = get_value(config, "SOURCE_COMPARE_TIME_FIELD")
+    source_create_time_field = get_value(config, "SOURCE_CREATE_TIME_FIELD")
     sql = (
         f"SELECT {', '.join(select_columns)} "
-        f"FROM {quote_ident(SOURCE_TABLE)}"
+        f"FROM {quote_ident(source_table)}"
         f"{where_sql}"
-        f" ORDER BY {quote_ident(SOURCE_COMPARE_TIME_FIELD)} ASC, {quote_ident(SOURCE_CREATE_TIME_FIELD)} ASC"
+        f" ORDER BY {quote_ident(source_compare_time_field)} ASC, {quote_ident(source_create_time_field)} ASC"
     )
     return sql, params, alias_order
 
 
-def build_target_lookup_sql() -> tuple[str, list[str]]:
-    if not MATCH_COLUMN_MAPPING:
+def build_target_lookup_sql(config: object) -> tuple[str, list[str]]:
+    match_column_mapping = list(get_value(config, "MATCH_COLUMN_MAPPING"))
+    if not match_column_mapping:
         raise ValueError("MATCH_COLUMN_MAPPING cannot be empty.")
 
-    lookup_columns = [target_column for _, target_column in MATCH_COLUMN_MAPPING]
+    target_table = get_value(config, "TARGET_TABLE")
+    target_compare_time_field = get_value(config, "TARGET_COMPARE_TIME_FIELD")
+    lookup_columns = [target_column for _, target_column in match_column_mapping]
     where_sql = " AND ".join(f"{quote_ident(column)} = %s" for column in lookup_columns)
     sql = (
-        f"SELECT {quote_ident(TARGET_COMPARE_TIME_FIELD)} "
-        f"FROM {quote_ident(TARGET_TABLE)} "
+        f"SELECT {quote_ident(target_compare_time_field)} "
+        f"FROM {quote_ident(target_table)} "
         f"WHERE {where_sql} "
         "LIMIT 1"
     )
     return sql, lookup_columns
 
 
-def build_insert_sql() -> tuple[str, list[str]]:
-    target_columns = [target_column for _, target_column in get_sync_column_mapping()]
+def build_insert_sql(config: object) -> tuple[str, list[str]]:
+    target_table = get_value(config, "TARGET_TABLE")
+    use_upsert = bool(get_value(config, "USE_UPSERT"))
+    upsert_update_columns = list(get_value(config, "UPSERT_UPDATE_COLUMNS", []))
+    target_columns = [target_column for _, target_column in get_sync_column_mapping(config)]
     placeholders = ", ".join(["%s"] * len(target_columns))
     columns_sql = ", ".join(quote_ident(column) for column in target_columns)
 
-    if not USE_UPSERT:
-        sql = f"INSERT INTO {quote_ident(TARGET_TABLE)} ({columns_sql}) VALUES ({placeholders})"
+    if not use_upsert:
+        sql = f"INSERT INTO {quote_ident(target_table)} ({columns_sql}) VALUES ({placeholders})"
         return sql, target_columns
 
-    update_columns = UPSERT_UPDATE_COLUMNS or target_columns
+    update_columns = upsert_update_columns or target_columns
     update_sql = ", ".join(
         f"{quote_ident(column)} = VALUES({quote_ident(column)})" for column in update_columns
     )
     sql = (
-        f"INSERT INTO {quote_ident(TARGET_TABLE)} ({columns_sql}) VALUES ({placeholders}) "
+        f"INSERT INTO {quote_ident(target_table)} ({columns_sql}) VALUES ({placeholders}) "
         f"ON DUPLICATE KEY UPDATE {update_sql}"
     )
     return sql, target_columns
 
 
-def build_update_sql() -> tuple[str, list[str], list[str]]:
-    target_columns = [target_column for _, target_column in get_sync_column_mapping()]
-    update_columns = UPSERT_UPDATE_COLUMNS or target_columns
+def build_update_sql(config: object) -> tuple[str, list[str], list[str]]:
+    target_table = get_value(config, "TARGET_TABLE")
+    upsert_update_columns = list(get_value(config, "UPSERT_UPDATE_COLUMNS", []))
+    target_columns = [target_column for _, target_column in get_sync_column_mapping(config)]
+    update_columns = upsert_update_columns or target_columns
     set_sql = ", ".join(f"{quote_ident(column)} = %s" for column in update_columns)
-    key_columns = [target_column for _, target_column in MATCH_COLUMN_MAPPING]
+    key_columns = [target_column for _, target_column in get_value(config, "MATCH_COLUMN_MAPPING")]
     where_sql = " AND ".join(f"{quote_ident(column)} = %s" for column in key_columns)
-    sql = f"UPDATE {quote_ident(TARGET_TABLE)} SET {set_sql} WHERE {where_sql}"
+    sql = f"UPDATE {quote_ident(target_table)} SET {set_sql} WHERE {where_sql}"
     return sql, update_columns, key_columns
 
 
@@ -211,11 +246,10 @@ def normalize_timestamp(value: object) -> object:
         return value
     if isinstance(value, str):
         text = value.strip().replace("Z", "+00:00")
-        for parser in (dt.datetime.fromisoformat,):
-            try:
-                return parser(text)
-            except ValueError:
-                continue
+        try:
+            return dt.datetime.fromisoformat(text)
+        except ValueError:
+            return value
     return value
 
 
@@ -245,17 +279,20 @@ def print_sql(label: str, sql: str, params: list[object] | tuple[object, ...] | 
         print(f"[SQL] {label} params: {tuple(params)!r}")
 
 
-def run_debug() -> None:
-    source_sql, source_params, alias_order = build_source_select_sql()
-    lookup_sql, lookup_columns = build_target_lookup_sql()
-    insert_sql, insert_columns = build_insert_sql()
-    update_sql, update_columns, update_keys = build_update_sql()
+def run_debug(config: object) -> None:
+    source_sql, source_params, alias_order = build_source_select_sql(config)
+    lookup_sql, lookup_columns = build_target_lookup_sql(config)
+    insert_sql, insert_columns = build_insert_sql(config)
+    update_sql, update_columns, update_keys = build_update_sql(config)
 
     print("DEBUG=True, no SQL will be executed.")
-    print(f"[CONFIG] batch_size={BATCH_SIZE}, sleep_seconds={SLEEP_SECONDS}")
+    print(f"[CONFIG] batch_size={get_value(config, 'BATCH_SIZE')}, sleep_seconds={get_value(config, 'SLEEP_SECONDS')}")
     print(f"[CONFIG] sync_columns={alias_order}")
     print(f"[CONFIG] match_columns={lookup_columns}")
-    print(f"[CONFIG] compare_field={SOURCE_COMPARE_TIME_FIELD} -> {TARGET_COMPARE_TIME_FIELD}")
+    print(
+        f"[CONFIG] compare_field={get_value(config, 'SOURCE_COMPARE_TIME_FIELD')} -> "
+        f"{get_value(config, 'TARGET_COMPARE_TIME_FIELD')}"
+    )
     print_sql("SOURCE SELECT", source_sql, source_params)
     print_sql("TARGET LOOKUP", lookup_sql, [])
     print_sql("INSERT/UPSERT", insert_sql, [])
@@ -270,6 +307,7 @@ def row_values(row: dict[str, object], columns: list[str]) -> tuple[object, ...]
 
 
 def process_row(
+    config: object,
     source_row: dict[str, object],
     target_cursor: pymysql.cursors.DictCursor,
     insert_sql: str,
@@ -284,18 +322,21 @@ def process_row(
     target_cursor.execute(lookup_sql, lookup_params)
     target_row = target_cursor.fetchone()
 
-    source_time = source_row[TARGET_COMPARE_TIME_FIELD]
-    target_time = target_row[TARGET_COMPARE_TIME_FIELD] if target_row else None
+    source_compare_time_field = get_value(config, "SOURCE_COMPARE_TIME_FIELD")
+    target_compare_time_field = get_value(config, "TARGET_COMPARE_TIME_FIELD")
+    source_time = source_row[source_compare_time_field]
+    target_time = target_row[target_compare_time_field] if target_row else None
     if not should_sync(source_time, target_time):
         return "skip"
 
     insert_params = row_values(source_row, insert_columns)
+    use_upsert = bool(get_value(config, "USE_UPSERT"))
 
     if target_row is None:
         target_cursor.execute(insert_sql, insert_params)
         return "insert"
 
-    if USE_UPSERT:
+    if use_upsert:
         target_cursor.execute(insert_sql, insert_params)
         return "upsert"
 
@@ -305,35 +346,47 @@ def process_row(
 
 
 def main() -> None:
-    if DEBUG:
-        run_debug()
+    parser = argparse.ArgumentParser(description="Sync MySQL rows from source to target.")
+    parser.add_argument(
+        "--config",
+        default="db_config.py",
+        help="Path to the config file. Default: db_config.py",
+    )
+    args = parser.parse_args()
+    config = load_config(args.config)
+
+    if bool(get_value(config, "DEBUG")):
+        run_debug(config)
         return
 
-    source_sql, source_params, _ = build_source_select_sql()
-    lookup_sql, lookup_columns = build_target_lookup_sql()
-    insert_sql, insert_columns = build_insert_sql()
-    update_sql, update_columns, update_keys = build_update_sql()
+    source_sql, source_params, _ = build_source_select_sql(config)
+    lookup_sql, lookup_columns = build_target_lookup_sql(config)
+    insert_sql, insert_columns = build_insert_sql(config)
+    update_sql, update_columns, update_keys = build_update_sql(config)
 
-    source_conn = connect_mysql(SOURCE_DB)
-    target_conn = connect_mysql(TARGET_DB)
+    source_conn = connect_mysql(get_value(config, "SOURCE_DB"))
+    target_conn = connect_mysql(get_value(config, "TARGET_DB"))
 
     try:
         with closing(source_conn.cursor()) as source_cursor, closing(target_conn.cursor()) as target_cursor:
             print_sql("SOURCE SELECT", source_sql, source_params)
             source_cursor.execute(source_sql, tuple(source_params))
 
+            batch_size = int(get_value(config, "BATCH_SIZE"))
+            sleep_seconds = float(get_value(config, "SLEEP_SECONDS"))
             total_rows = 0
             total_inserted = 0
             total_updated = 0
             total_skipped = 0
 
             while True:
-                batch = source_cursor.fetchmany(BATCH_SIZE)
+                batch = source_cursor.fetchmany(batch_size)
                 if not batch:
                     break
 
                 for source_row in batch:
                     action = process_row(
+                        config=config,
                         source_row=source_row,
                         target_cursor=target_cursor,
                         insert_sql=insert_sql,
@@ -360,8 +413,8 @@ def main() -> None:
                     f"{total_rows} inserted={total_inserted} updated={total_updated} skipped={total_skipped}"
                 )
 
-                if SLEEP_SECONDS > 0 and len(batch) == BATCH_SIZE:
-                    time.sleep(SLEEP_SECONDS)
+                if sleep_seconds > 0 and len(batch) == batch_size:
+                    time.sleep(sleep_seconds)
 
     except Exception:
         target_conn.rollback()

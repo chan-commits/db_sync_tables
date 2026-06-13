@@ -14,6 +14,12 @@
 uv run --no-sync python sync_table.py
 ```
 
+也可以直接指定其他配置文件：
+
+```bash
+uv run --no-sync python sync_table.py --config /path/to/your_config.py
+```
+
 3. 如果你希望由 uv 根据 `pyproject.toml` 创建或刷新环境，先执行
    `uv sync`，再运行脚本。
 4. 将 `DEBUG = True`，只打印 SQL 模板，不实际执行。
