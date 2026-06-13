@@ -103,6 +103,9 @@ Field notes:
   `SOURCE_CHANGE_TIME_FIELD` / `TARGET_CHANGE_TIME_FIELD` are the field names
   used by the source filter and auto-mapping logic. They can be different from
   the actual column names in your tables.
+- `Gurl` is a fixed cleanup field in `sync_table.py`:
+  - `1^1$` becomes empty string
+  - `#2^2$`, `#19^19$`, `#28^28$`, etc. become `\n`
 - Why there are multiple time fields:
   - `create_time` is usually the original creation timestamp
   - `change_time` is usually the last modified timestamp

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import importlib.util
+import re
 import time
 from contextlib import closing
 from pathlib import Path
@@ -18,6 +19,14 @@ from types import ModuleType
 import pymysql
 
 _MISSING = object()
+
+# Fields that need fixed cleanup before writing to the target table.
+# Change this name directly if your source/target field name changes.
+GURL_FIELD = "Gurl"
+
+# Source cleanup patterns for GURL_FIELD.
+GURL_CLEAR_VALUE = "1^1$"
+GURL_NEWLINE_PATTERN = re.compile(r"^#(\d{1,4})\^(\d{1,4})\$$")
 
 
 def quote_ident(name: str) -> str:
@@ -264,6 +273,23 @@ def normalize_timestamp(value: object) -> object:
     return value
 
 
+def clean_gurl_value(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+    if value == GURL_CLEAR_VALUE:
+        return ""
+    if GURL_NEWLINE_PATTERN.fullmatch(value):
+        return "\n"
+    return value
+
+
+def clean_source_row(source_row: dict[str, object]) -> dict[str, object]:
+    cleaned_row = dict(source_row)
+    if GURL_FIELD in cleaned_row:
+        cleaned_row[GURL_FIELD] = clean_gurl_value(cleaned_row[GURL_FIELD])
+    return cleaned_row
+
+
 def should_sync(source_time: object, target_time: object) -> bool:
     if source_time is None:
         return True
@@ -329,18 +355,19 @@ def process_row(
     lookup_sql: str,
     lookup_columns: list[str],
 ) -> str:
-    lookup_params = row_values(source_row, lookup_columns)
+    cleaned_row = clean_source_row(source_row)
+    lookup_params = row_values(cleaned_row, lookup_columns)
     target_cursor.execute(lookup_sql, lookup_params)
     target_row = target_cursor.fetchone()
 
     source_compare_time_field = get_value(config, "SOURCE_COMPARE_TIME_FIELD")
     target_compare_time_field = get_value(config, "TARGET_COMPARE_TIME_FIELD")
-    source_time = source_row[source_compare_time_field]
+    source_time = cleaned_row[source_compare_time_field]
     target_time = target_row[target_compare_time_field] if target_row else None
     if not should_sync(source_time, target_time):
         return "skip"
 
-    insert_params = row_values(source_row, insert_columns)
+    insert_params = row_values(cleaned_row, insert_columns)
     use_upsert = bool(get_value(config, "USE_UPSERT"))
 
     if target_row is None:
@@ -351,7 +378,7 @@ def process_row(
         target_cursor.execute(insert_sql, insert_params)
         return "upsert"
 
-    update_params = row_values(source_row, update_columns) + row_values(source_row, update_keys)
+    update_params = row_values(cleaned_row, update_columns) + row_values(cleaned_row, update_keys)
     target_cursor.execute(update_sql, update_params)
     return "update"
 

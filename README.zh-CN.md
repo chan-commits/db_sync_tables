@@ -97,6 +97,9 @@ SLEEP_SECONDS = 5
 - `SOURCE_COMPARE_TIME_FIELD` / `TARGET_COMPARE_TIME_FIELD`：用于插入/更新/跳过判断的时间字段。
 - `SOURCE_CREATE_TIME_FIELD` / `TARGET_CREATE_TIME_FIELD` 和
   `SOURCE_CHANGE_TIME_FIELD` / `TARGET_CHANGE_TIME_FIELD`：用于源表筛选和自动映射，可以按实际字段名自定义。
+- `Gurl` 是 `sync_table.py` 里的固定清洗字段：
+  - `1^1$` 会被替换为空字符串
+  - `#2^2$`、`#19^19$`、`#28^28$` 等会被替换为 `\n`
 - 为什么会有多个 TIME_FIELD：
   - `create_time` 通常表示创建时间
   - `change_time` 通常表示最后更新时间
