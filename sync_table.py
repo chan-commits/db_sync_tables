@@ -73,6 +73,11 @@ def get_value(config: object, name: str, default: object = _MISSING) -> object:
     raise AttributeError(f"Missing required config value: {name}")
 
 
+def append_unique(items: list[str], value: str) -> None:
+    if value not in items:
+        items.append(value)
+
+
 def build_range_clause(field: str, start: object, end: object) -> tuple[str, list[object]]:
     parts: list[str] = []
     params: list[object] = []
@@ -159,30 +164,14 @@ def unique_mappings(*mapping_groups: list[tuple[str, str]]) -> list[tuple[str, s
 
 
 def get_sync_column_mapping(config: object) -> list[tuple[str, str]]:
-    column_mapping = list(get_value(config, "COLUMN_MAPPING"))
-    match_column_mapping = list(get_value(config, "MATCH_COLUMN_MAPPING"))
-    source_create_time_field = get_value(config, "SOURCE_CREATE_TIME_FIELD")
-    target_create_time_field = get_value(config, "TARGET_CREATE_TIME_FIELD")
-    source_change_time_field = get_value(config, "SOURCE_CHANGE_TIME_FIELD")
-    target_change_time_field = get_value(config, "TARGET_CHANGE_TIME_FIELD")
-    source_compare_time_field = get_value(config, "SOURCE_COMPARE_TIME_FIELD")
-    target_compare_time_field = get_value(config, "TARGET_COMPARE_TIME_FIELD")
-
-    auto_mappings = [
-        match_column_mapping,
-        [
-            (source_create_time_field, target_create_time_field),
-            (source_change_time_field, target_change_time_field),
-            (source_compare_time_field, target_compare_time_field),
-        ],
-    ]
-    return unique_mappings(column_mapping, *auto_mappings)
+    return list(get_value(config, "COLUMN_MAPPING"))
 
 
 def build_source_select_sql(config: object) -> tuple[str, list[object], list[str]]:
     sync_mapping = get_sync_column_mapping(config)
     select_columns: list[str] = []
     alias_order: list[str] = []
+    source_compare_time_field = get_value(config, "SOURCE_COMPARE_TIME_FIELD")
 
     for source_column, target_column in sync_mapping:
         alias_order.append(target_column)
@@ -191,9 +180,11 @@ def build_source_select_sql(config: object) -> tuple[str, list[object], list[str
         else:
             select_columns.append(f"{quote_ident(source_column)} AS {quote_ident(target_column)}")
 
+    append_unique(alias_order, source_compare_time_field)
+    append_unique(select_columns, quote_ident(source_compare_time_field))
+
     where_sql, params = build_time_where_clause(config)
     source_table = get_value(config, "SOURCE_TABLE")
-    source_compare_time_field = get_value(config, "SOURCE_COMPARE_TIME_FIELD")
     source_create_time_field = get_value(config, "SOURCE_CREATE_TIME_FIELD")
     sql = (
         f"SELECT {', '.join(select_columns)} "
@@ -226,7 +217,11 @@ def build_insert_sql(config: object) -> tuple[str, list[str]]:
     target_table = get_value(config, "TARGET_TABLE")
     use_upsert = bool(get_value(config, "USE_UPSERT"))
     upsert_update_columns = list(get_value(config, "UPSERT_UPDATE_COLUMNS", []))
+    target_create_time_field = get_value(config, "TARGET_CREATE_TIME_FIELD")
+    target_compare_time_field = get_value(config, "TARGET_COMPARE_TIME_FIELD")
     target_columns = [target_column for _, target_column in get_sync_column_mapping(config)]
+    append_unique(target_columns, target_create_time_field)
+    append_unique(target_columns, target_compare_time_field)
     placeholders = ", ".join(["%s"] * len(target_columns))
     columns_sql = ", ".join(quote_ident(column) for column in target_columns)
 
@@ -248,8 +243,10 @@ def build_insert_sql(config: object) -> tuple[str, list[str]]:
 def build_update_sql(config: object) -> tuple[str, list[str], list[str]]:
     target_table = get_value(config, "TARGET_TABLE")
     upsert_update_columns = list(get_value(config, "UPSERT_UPDATE_COLUMNS", []))
+    target_compare_time_field = get_value(config, "TARGET_COMPARE_TIME_FIELD")
     target_columns = [target_column for _, target_column in get_sync_column_mapping(config)]
     update_columns = upsert_update_columns or target_columns
+    append_unique(update_columns, target_compare_time_field)
     set_sql = ", ".join(f"{quote_ident(column)} = %s" for column in update_columns)
     key_columns = [target_column for _, target_column in get_value(config, "MATCH_COLUMN_MAPPING")]
     where_sql = " AND ".join(f"{quote_ident(column)} = %s" for column in key_columns)
@@ -266,6 +263,8 @@ def normalize_timestamp(value: object) -> object:
         return value
     if isinstance(value, str):
         text = value.strip().replace("Z", "+00:00")
+        if text.isdigit():
+            return int(text)
         try:
             return dt.datetime.fromisoformat(text)
         except ValueError:
@@ -347,6 +346,7 @@ def process_row(
     config: object,
     source_row: dict[str, object],
     target_cursor: pymysql.cursors.DictCursor,
+    business_mapping: list[tuple[str, str]],
     insert_sql: str,
     insert_columns: list[str],
     update_sql: str,
@@ -356,7 +356,9 @@ def process_row(
     lookup_columns: list[str],
 ) -> str:
     cleaned_row = clean_source_row(source_row)
-    lookup_params = row_values(cleaned_row, lookup_columns)
+    match_mapping = list(get_value(config, "MATCH_COLUMN_MAPPING"))
+    match_source_by_target = {target_column: source_column for source_column, target_column in match_mapping}
+    lookup_params = tuple(cleaned_row[match_source_by_target[column]] for column in lookup_columns)
     target_cursor.execute(lookup_sql, lookup_params)
     target_row = target_cursor.fetchone()
 
@@ -367,8 +369,13 @@ def process_row(
     if not should_sync(source_time, target_time):
         return "skip"
 
-    insert_params = row_values(cleaned_row, insert_columns)
     use_upsert = bool(get_value(config, "USE_UPSERT"))
+    generated_time = normalize_timestamp(source_time)
+    source_by_target = {target_column: source_column for source_column, target_column in business_mapping}
+    insert_params = tuple(cleaned_row[source_by_target[column]] for column in source_by_target) + (
+        generated_time,
+        generated_time,
+    )
 
     if target_row is None:
         target_cursor.execute(insert_sql, insert_params)
@@ -378,7 +385,10 @@ def process_row(
         target_cursor.execute(insert_sql, insert_params)
         return "upsert"
 
-    update_params = row_values(cleaned_row, update_columns) + row_values(cleaned_row, update_keys)
+    update_target_columns = [column for column in update_columns if column != target_compare_time_field]
+    update_params = tuple(cleaned_row[source_by_target[column]] for column in update_target_columns) + (
+        generated_time,
+    ) + tuple(cleaned_row[match_source_by_target[column]] for column in update_keys)
     target_cursor.execute(update_sql, update_params)
     return "update"
 
@@ -397,6 +407,7 @@ def main() -> None:
         run_debug(config)
         return
 
+    business_mapping = get_sync_column_mapping(config)
     source_sql, source_params, _ = build_source_select_sql(config)
     lookup_sql, lookup_columns = build_target_lookup_sql(config)
     insert_sql, insert_columns = build_insert_sql(config)
@@ -427,6 +438,7 @@ def main() -> None:
                         config=config,
                         source_row=source_row,
                         target_cursor=target_cursor,
+                        business_mapping=business_mapping,
                         insert_sql=insert_sql,
                         insert_columns=insert_columns,
                         update_sql=update_sql,

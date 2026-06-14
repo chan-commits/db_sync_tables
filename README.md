@@ -99,6 +99,9 @@ Field notes:
     skip it
 - `SOURCE_COMPARE_TIME_FIELD` and `TARGET_COMPARE_TIME_FIELD` are the fields
   used for the insert/update/skip comparison.
+- `ctime` and `mtime` are auto-added to the target write SQL. On insert, both
+  are set to the source compare value so they stay equal; on update, only
+  `mtime` is refreshed.
 - `SOURCE_CREATE_TIME_FIELD` / `TARGET_CREATE_TIME_FIELD` and
   `SOURCE_CHANGE_TIME_FIELD` / `TARGET_CHANGE_TIME_FIELD` are the field names
   used by the source filter and auto-mapping logic. They can be different from

@@ -95,6 +95,8 @@ SLEEP_SECONDS = 5
   - 如果目标表有这条记录，并且目标时间戳小于源时间戳，执行更新
   - 如果目标时间戳大于等于源时间戳，则跳过
 - `SOURCE_COMPARE_TIME_FIELD` / `TARGET_COMPARE_TIME_FIELD`：用于插入/更新/跳过判断的时间字段。
+- `ctime` 和 `mtime` 会自动加入写入 SQL。插入时两者都使用源表的
+  compare 值，所以它们始终相同；更新时只刷新 `mtime`。
 - `SOURCE_CREATE_TIME_FIELD` / `TARGET_CREATE_TIME_FIELD` 和
   `SOURCE_CHANGE_TIME_FIELD` / `TARGET_CHANGE_TIME_FIELD`：用于源表筛选和自动映射，可以按实际字段名自定义。
 - `Gurl` 是 `sync_table.py` 里的固定清洗字段：
