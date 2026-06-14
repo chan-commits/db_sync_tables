@@ -178,6 +178,11 @@ def get_sync_column_mapping(config: object) -> list[tuple[str, str]]:
     return column_mapping
 
 
+def get_match_source_fields(config: object) -> list[str]:
+    match_column_mapping = list(get_value(config, "MATCH_COLUMN_MAPPING"))
+    return [source_column for source_column, _ in match_column_mapping]
+
+
 def get_area_cid_mapping(config: object) -> dict[str, object]:
     return dict(get_value(config, "AREA_CID_MAPPING", {}))
 
@@ -206,6 +211,7 @@ def build_source_select_sql(config: object) -> tuple[str, list[object], list[str
     select_columns: list[str] = []
     alias_order: list[str] = []
     source_compare_time_field = get_value(config, "SOURCE_COMPARE_TIME_FIELD")
+    match_source_fields = get_match_source_fields(config)
 
     for source_column, target_column in sync_mapping:
         alias_order.append(target_column)
@@ -214,6 +220,8 @@ def build_source_select_sql(config: object) -> tuple[str, list[object], list[str
         else:
             select_columns.append(f"{quote_ident(source_column)} AS {quote_ident(target_column)}")
 
+    for source_column in match_source_fields:
+        append_unique(select_columns, quote_ident(source_column))
     append_unique(alias_order, source_compare_time_field)
     append_unique(select_columns, quote_ident(source_compare_time_field))
 

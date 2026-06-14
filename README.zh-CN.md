@@ -90,6 +90,8 @@ SLEEP_SECONDS = 5
 - `COLUMN_MAPPING`：从源表同步到目标表的字段映射。
 - `MATCH_COLUMN_MAPPING`：用于判断同一条记录的匹配字段。
   如果源表和目标表字段名一样，直接写成相同的配对，例如 `("id", "id")`。
+  `MATCH_COLUMN_MAPPING` 里的源字段会自动加入源表查询，不需要再手动写进
+  `COLUMN_MAPPING`。
 - `AREA_SOURCE_FIELD` / `AREA_TARGET_FIELD`：area 的源字段和目标字段。
 - `AREA_CID_MAPPING`：根据清洗后的 area 推导 cid 的映射表。
 - 如果清洗后的 area 没有在 `AREA_CID_MAPPING` 中定义，`cid` 会回退到

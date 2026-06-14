@@ -91,6 +91,8 @@ Field notes:
 - `MATCH_COLUMN_MAPPING` defines how a source row matches a target row.
   If the column names are the same on both sides, write them the same way,
   for example `("id", "id")`.
+  The source columns in `MATCH_COLUMN_MAPPING` are automatically selected from
+  the source table, so they do not need to be repeated in `COLUMN_MAPPING`.
 - `AREA_SOURCE_FIELD` / `AREA_TARGET_FIELD` define the source-to-target area
   mapping, and `AREA_CID_MAPPING` defines the derived cid lookup.
 - If a cleaned area is not found in `AREA_CID_MAPPING`, `cid` falls back to
