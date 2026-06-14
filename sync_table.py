@@ -22,11 +22,13 @@ _MISSING = object()
 
 # Fields that need fixed cleanup before writing to the target table.
 # Change this name directly if your source/target field name changes.
-GURL_FIELD = "Gurl"
+GURL_FIELD = "gurl"
 
 # Source cleanup patterns for GURL_FIELD.
 GURL_CLEAR_PATTERN = re.compile(r"^1\^.*\$$")
 GURL_NEWLINE_PATTERN = re.compile(r"^#(\d{1,4})\^(\d{1,4})\$$")
+GURL_SEPARATOR_PATTERN = re.compile(r"#\d{1,4}\^[^/]*\$")
+GURL_M3U8_PATTERN = re.compile(r"/[^\s\r\n#]*?index\.m3u8")
 
 
 def quote_ident(name: str) -> str:
@@ -336,11 +338,25 @@ def normalize_timestamp(value: object) -> object:
 def clean_gurl_value(value: object) -> object:
     if not isinstance(value, str):
         return value
-    if GURL_CLEAR_PATTERN.fullmatch(value):
+
+    text = value.strip()
+    if GURL_CLEAR_PATTERN.fullmatch(text):
         return ""
-    if GURL_NEWLINE_PATTERN.fullmatch(value):
+
+    if GURL_NEWLINE_PATTERN.fullmatch(text):
         return "\n"
-    return value
+
+    text = GURL_SEPARATOR_PATTERN.sub("\n", text)
+    first_slash_index = text.find("/")
+    if first_slash_index < 0:
+        return ""
+
+    text = text[first_slash_index:]
+    urls = GURL_M3U8_PATTERN.findall(text)
+    if urls:
+        return "\n".join(urls)
+
+    return text.strip()
 
 
 def clean_source_row(source_row: dict[str, object]) -> dict[str, object]:
@@ -392,6 +408,15 @@ def build_write_row(config: object, source_row: dict[str, object]) -> dict[str, 
         write_row[duration_target_field] = clean_duration_value(
             get_row_source_value(config, cleaned_row, duration_source_field)
         )
+
+    gurl_value = get_row_source_value(config, cleaned_row, GURL_FIELD)
+    if gurl_value is not None:
+        cleaned_gurl_value = clean_gurl_value(gurl_value)
+        for source_column, target_column in get_sync_column_mapping(config):
+            if source_column == GURL_FIELD:
+                write_row[target_column] = cleaned_gurl_value
+        if GURL_FIELD in write_row:
+            write_row[GURL_FIELD] = cleaned_gurl_value
 
     generated_time = normalize_timestamp(cleaned_row[source_compare_time_field])
     write_row[target_create_time_field] = generated_time

@@ -112,9 +112,12 @@ Field notes:
   `SOURCE_CHANGE_TIME_FIELD` / `TARGET_CHANGE_TIME_FIELD` are the field names
   used by the source filter and auto-mapping logic. They can be different from
   the actual column names in your tables.
-- `Gurl` is a fixed cleanup field in `sync_table.py`:
-  - any string that starts with `1^...$` becomes empty string
-  - `#2^2$`, `#19^19$`, `#28^28$`, etc. become `\n`
+- `gurl` is a fixed cleanup field in `sync_table.py`:
+  - change `GURL_FIELD = "gurl"` in `sync_table.py` if your source field name is different
+  - extra characters before the first `/` are removed
+  - tokens like `#5^XXXX$`, `#19^XXXX$`, etc. are treated as separators
+  - `/.../index.m3u8` values are extracted and joined with `\n`
+  - if no `/.../index.m3u8` value exists, the cleaned value becomes empty
 - `area` is appended automatically from `AREA_SOURCE_FIELD` /
   `AREA_TARGET_FIELD` in `db_config.py`.
 - `area` is cleaned before writing:
@@ -142,6 +145,12 @@ Field notes:
 - If `TIME_FILTER_MODE = "create_or_change"`, the source query filters by the
   source create time field or source change time field.
 - `EXTRA_WHERE_SQL` and `EXTRA_WHERE_PARAMS` add extra source-side filters.
+  Example for `type_id_1 = 4` and `status = 1`:
+
+```python
+EXTRA_WHERE_SQL = "`type_id_1` = %s AND `status` = %s"
+EXTRA_WHERE_PARAMS = (4, 1)
+```
 - `USE_UPSERT = True` uses `INSERT ... ON DUPLICATE KEY UPDATE` when a row
   needs to be written.
 - `UPSERT_UPDATE_COLUMNS` limits which columns are refreshed during upsert.

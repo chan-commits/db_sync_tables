@@ -105,9 +105,12 @@ SLEEP_SECONDS = 5
   compare 值，所以它们始终相同；更新时只刷新 `mtime`。
 - `SOURCE_CREATE_TIME_FIELD` / `TARGET_CREATE_TIME_FIELD` 和
   `SOURCE_CHANGE_TIME_FIELD` / `TARGET_CHANGE_TIME_FIELD`：用于源表筛选和自动映射，可以按实际字段名自定义。
-- `Gurl` 是 `sync_table.py` 里的固定清洗字段：
-  - 任何以 `1^...$` 开头的字符串都会被替换为空字符串
-  - `#2^2$`、`#19^19$`、`#28^28$` 等会被替换为 `\n`
+- `gurl` 是 `sync_table.py` 里的固定清洗字段：
+  - 如果源字段名不同，直接改 `sync_table.py` 顶部的 `GURL_FIELD = "gurl"`
+  - 第一个 `/` 之前的多余字符会被清掉
+  - `#5^XXXX$`、`#19^XXXX$` 等标记会当作分隔符处理
+  - `/.../index.m3u8` 会被提取出来，并用 `\n` 拼接
+  - 如果没有 `/.../index.m3u8`，清洗后会变成空字符串
 - `area` 会通过 `db_config.py` 末尾的 `AREA_SOURCE_FIELD` /
   `AREA_TARGET_FIELD` 自动追加到写入 SQL。
 - `area` 在写入前会先清洗：
@@ -132,6 +135,12 @@ SLEEP_SECONDS = 5
 - 如果 `TIME_FILTER_MODE = "change_time"`，则按源表变更时间筛选。
 - 如果 `TIME_FILTER_MODE = "create_or_change"`，则按源表创建时间或变更时间筛选。
 - `EXTRA_WHERE_SQL` / `EXTRA_WHERE_PARAMS`：额外的源表筛选条件。
+  例如同时筛选 `type_id_1 = 4` 和 `status = 1`：
+
+```python
+EXTRA_WHERE_SQL = "`type_id_1` = %s AND `status` = %s"
+EXTRA_WHERE_PARAMS = (4, 1)
+```
 - `USE_UPSERT = True`：当需要写入时，使用 `INSERT ... ON DUPLICATE KEY UPDATE`。
 - `UPSERT_UPDATE_COLUMNS`：限制 upsert 时实际刷新的字段。
 - `BATCH_SIZE` 默认 `5`。
