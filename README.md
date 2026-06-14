@@ -93,6 +93,8 @@ Field notes:
   for example `("id", "id")`.
 - `AREA_SOURCE_FIELD` / `AREA_TARGET_FIELD` define the source-to-target area
   mapping, and `AREA_CID_MAPPING` defines the derived cid lookup.
+- If a cleaned area is not found in `AREA_CID_MAPPING`, `cid` falls back to
+  `AREA_CID_DEFAULT` and defaults to `10`.
 - Sync decision:
   - if the target row does not exist, insert it
   - if the target row exists and the target timestamp is older than the

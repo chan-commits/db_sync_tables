@@ -178,6 +178,10 @@ def get_area_cid_mapping(config: object) -> dict[str, object]:
     return dict(get_value(config, "AREA_CID_MAPPING", {}))
 
 
+def get_area_cid_default(config: object) -> object:
+    return get_value(config, "AREA_CID_DEFAULT", 10)
+
+
 def build_source_select_sql(config: object) -> tuple[str, list[object], list[str]]:
     sync_mapping = get_sync_column_mapping(config)
     select_columns: list[str] = []
@@ -335,6 +339,7 @@ def build_write_row(config: object, source_row: dict[str, object]) -> dict[str, 
     area_target_field = get_value(config, "AREA_TARGET_FIELD", None)
     cid_target_field = get_value(config, "CID_TARGET_FIELD", "cid")
     area_cid_mapping = get_area_cid_mapping(config)
+    area_cid_default = get_area_cid_default(config)
     source_compare_time_field = get_value(config, "SOURCE_COMPARE_TIME_FIELD")
     target_create_time_field = get_value(config, "TARGET_CREATE_TIME_FIELD")
     target_compare_time_field = get_value(config, "TARGET_COMPARE_TIME_FIELD")
@@ -342,7 +347,7 @@ def build_write_row(config: object, source_row: dict[str, object]) -> dict[str, 
     if area_source_field and area_target_field:
         area_value = clean_area_value(cleaned_row.get(area_source_field))
         write_row[area_target_field] = area_value
-        write_row[cid_target_field] = area_cid_mapping.get(area_value)
+        write_row[cid_target_field] = area_cid_mapping.get(area_value, area_cid_default)
 
     generated_time = normalize_timestamp(cleaned_row[source_compare_time_field])
     write_row[target_create_time_field] = generated_time

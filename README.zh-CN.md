@@ -92,6 +92,8 @@ SLEEP_SECONDS = 5
   如果源表和目标表字段名一样，直接写成相同的配对，例如 `("id", "id")`。
 - `AREA_SOURCE_FIELD` / `AREA_TARGET_FIELD`：area 的源字段和目标字段。
 - `AREA_CID_MAPPING`：根据清洗后的 area 推导 cid 的映射表。
+- 如果清洗后的 area 没有在 `AREA_CID_MAPPING` 中定义，`cid` 会回退到
+  `AREA_CID_DEFAULT`，默认值为 `10`。
 - 同步判定流程：
   - 如果目标表没有这条记录，直接插入
   - 如果目标表有这条记录，并且目标时间戳小于源时间戳，执行更新

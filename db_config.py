@@ -127,3 +127,4 @@ AREA_CID_MAPPING = {
     "中国": 8,
     "韩国": 9,
 }
+AREA_CID_DEFAULT = 10
