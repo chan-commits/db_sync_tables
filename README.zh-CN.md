@@ -209,9 +209,6 @@ BATCH_SIZE = 5
 SLEEP_SECONDS = 5
 ```
 
-这个示例的含义：
-
-- `MATCH_COLUMN_MAPPING = [("order_id", "order_id")]` 表示两边都用
 - `MATCH_COLUMN_MAPPING = [("customer_id", "customer_id")]` 表示两边都用
   `customer_id` 识别同一条数据。
 - 如果目标表里没有相同 `customer_id` 的记录，就插入。
