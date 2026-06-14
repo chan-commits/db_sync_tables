@@ -384,12 +384,14 @@ def build_write_row(config: object, source_row: dict[str, object]) -> dict[str, 
     target_compare_time_field = get_value(config, "TARGET_COMPARE_TIME_FIELD")
 
     if area_source_field and area_target_field:
-        area_value = clean_area_value(cleaned_row.get(area_source_field))
+        area_value = clean_area_value(get_row_source_value(config, cleaned_row, area_source_field))
         write_row[area_target_field] = area_value
         write_row[cid_target_field] = area_cid_mapping.get(area_value, area_cid_default)
 
     if duration_source_field and duration_target_field:
-        write_row[duration_target_field] = clean_duration_value(cleaned_row.get(duration_source_field))
+        write_row[duration_target_field] = clean_duration_value(
+            get_row_source_value(config, cleaned_row, duration_source_field)
+        )
 
     generated_time = normalize_timestamp(cleaned_row[source_compare_time_field])
     write_row[target_create_time_field] = generated_time
@@ -405,13 +407,25 @@ def format_row_context(match_mapping: list[tuple[str, str]], row: dict[str, obje
     return repr(context)
 
 
+def get_row_source_value(config: object, row: dict[str, object], source_field: str) -> object:
+    if source_field in row:
+        return row[source_field]
+
+    sync_mapping = get_sync_column_mapping(config)
+    for mapped_source_field, mapped_target_field in sync_mapping:
+        if mapped_source_field == source_field and mapped_target_field in row:
+            return row[mapped_target_field]
+
+    return None
+
+
 def format_area_debug(config: object, source_row: dict[str, object]) -> str:
     area_source_field = get_value(config, "AREA_SOURCE_FIELD", None)
     area_target_field = get_value(config, "AREA_TARGET_FIELD", None)
     if not area_source_field or not area_target_field:
         return ""
 
-    raw_value = source_row.get(area_source_field)
+    raw_value = get_row_source_value(config, source_row, area_source_field)
     cleaned_value = clean_area_value(raw_value)
     return (
         f" area_source={area_source_field!r} raw_area={raw_value!r}"
@@ -424,7 +438,7 @@ def should_skip_empty_area(config: object, source_row: dict[str, object]) -> boo
     area_target_field = get_value(config, "AREA_TARGET_FIELD", None)
     if not area_source_field or not area_target_field:
         return False
-    return clean_area_value(source_row.get(area_source_field)) == ""
+    return clean_area_value(get_row_source_value(config, source_row, area_source_field)) == ""
 
 
 def should_sync(source_time: object, target_time: object) -> bool:
