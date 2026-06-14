@@ -139,6 +139,8 @@ SLEEP_SECONDS = 5
 - 每条处理结果都会打印决策日志，例如：
   - `processed=1 inserted=0 updated=0 skipped=1`
   - `[ROW] action=skip reason=target_time_newer_or_equal ...`
+- SQL 日志会同时打印参数化模板和替换参数后的实际 SQL，你可以直接拿
+  `rendered` 这行去元数据库或目标数据库执行排查。
 - 如果你只想依赖自己的 `EXTRA_WHERE_SQL`，就把 `TIME_FILTER_MODE`、
   `TIME_START`、`TIME_END` 都设为 `None`。
 

@@ -150,6 +150,9 @@ Field notes:
 - Each processed row prints a decision log such as:
   - `processed=1 inserted=0 updated=0 skipped=1`
   - `[ROW] action=skip reason=target_time_newer_or_equal ...`
+- SQL logs print both the parameterized template and the rendered SQL with
+  parameters already substituted, so you can run the rendered statement
+  directly against the source or target database.
 - If you want to rely only on your own `EXTRA_WHERE_SQL`, set `TIME_FILTER_MODE`,
   `TIME_START`, and `TIME_END` to `None`.
 

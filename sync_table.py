@@ -445,12 +445,32 @@ def should_sync(source_time: object, target_time: object) -> bool:
         ) from exc
 
 
-def print_sql(label: str, sql: str, params: list[object] | tuple[object, ...] | None = None) -> None:
+def render_sql(
+    cursor: pymysql.cursors.DictCursor,
+    sql: str,
+    params: list[object] | tuple[object, ...] | None,
+) -> str:
+    if params is None:
+        return sql
+    rendered = cursor.mogrify(sql, params)
+    if isinstance(rendered, bytes):
+        return rendered.decode("utf-8", errors="replace")
+    return str(rendered)
+
+
+def print_sql(
+    label: str,
+    sql: str,
+    params: list[object] | tuple[object, ...] | None = None,
+    cursor: pymysql.cursors.DictCursor | None = None,
+) -> None:
     if params is None:
         print(f"[SQL] {label}: {sql}")
     else:
         print(f"[SQL] {label}: {sql}")
         print(f"[SQL] {label} params: {tuple(params)!r}")
+        if cursor is not None:
+            print(f"[SQL] {label} rendered: {render_sql(cursor, sql, params)}")
 
 
 def run_debug(config: object) -> None:
@@ -513,6 +533,7 @@ def process_row(
         return "skip"
 
     lookup_params = tuple(cleaned_row[match_source_by_target[column]] for column in lookup_columns)
+    print_sql("TARGET LOOKUP", lookup_sql, lookup_params, target_cursor)
     target_cursor.execute(lookup_sql, lookup_params)
     target_row = target_cursor.fetchone()
 
@@ -534,6 +555,7 @@ def process_row(
     insert_params = tuple(write_row[column] for column in insert_columns)
 
     if target_row is None:
+        print_sql("INSERT/UPSERT", insert_sql, insert_params, target_cursor)
         target_cursor.execute(insert_sql, insert_params)
         print(
             f"[ROW] action=insert reason=target_row_missing "
@@ -544,6 +566,7 @@ def process_row(
         return "insert"
 
     if use_upsert:
+        print_sql("INSERT/UPSERT", insert_sql, insert_params, target_cursor)
         target_cursor.execute(insert_sql, insert_params)
         print(
             f"[ROW] action=upsert reason=target_row_exists_and_is_outdated "
@@ -556,6 +579,7 @@ def process_row(
     update_params = tuple(write_row[column] for column in update_columns) + tuple(
         cleaned_row[match_source_by_target[column]] for column in update_keys
     )
+    print_sql("UPDATE", update_sql, update_params, target_cursor)
     target_cursor.execute(update_sql, update_params)
     print(
         f"[ROW] action=update reason=target_row_exists_and_is_outdated "
@@ -590,7 +614,7 @@ def main() -> None:
 
     try:
         with closing(source_conn.cursor()) as source_cursor, closing(target_conn.cursor()) as target_cursor:
-            print_sql("SOURCE SELECT", source_sql, source_params)
+            print_sql("SOURCE SELECT", source_sql, source_params, source_cursor)
             source_cursor.execute(source_sql, tuple(source_params))
 
             batch_size = int(get_value(config, "BATCH_SIZE"))
