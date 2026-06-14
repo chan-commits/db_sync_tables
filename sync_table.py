@@ -447,6 +447,13 @@ def row_values(row: dict[str, object], columns: list[str]) -> tuple[object, ...]
     return tuple(row[column] for column in columns)
 
 
+def print_progress(processed: int, inserted: int, updated: int, skipped: int) -> None:
+    print(
+        f"processed={processed} inserted={inserted} "
+        f"updated={updated} skipped={skipped}"
+    )
+
+
 def process_row(
     config: object,
     source_row: dict[str, object],
@@ -552,13 +559,10 @@ def main() -> None:
                         total_updated += 1
                     else:
                         total_skipped += 1
+                    total_rows += 1
+                    print_progress(total_rows, total_inserted, total_updated, total_skipped)
 
                 target_conn.commit()
-                total_rows += len(batch)
-                print(
-                    "processed="
-                    f"{total_rows} inserted={total_inserted} updated={total_updated} skipped={total_skipped}"
-                )
 
                 if sleep_seconds > 0 and len(batch) == batch_size:
                     time.sleep(sleep_seconds)
