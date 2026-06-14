@@ -167,9 +167,13 @@ def get_sync_column_mapping(config: object) -> list[tuple[str, str]]:
     column_mapping = list(get_value(config, "COLUMN_MAPPING"))
     area_source_field = get_value(config, "AREA_SOURCE_FIELD", None)
     area_target_field = get_value(config, "AREA_TARGET_FIELD", None)
+    duration_source_field = get_value(config, "DURATION_SOURCE_FIELD", None)
+    duration_target_field = get_value(config, "DURATION_TARGET_FIELD", None)
 
     if area_source_field and area_target_field:
         column_mapping = unique_mappings(column_mapping, [(area_source_field, area_target_field)])
+    if duration_source_field and duration_target_field:
+        column_mapping = unique_mappings(column_mapping, [(duration_source_field, duration_target_field)])
 
     return column_mapping
 
@@ -180,6 +184,21 @@ def get_area_cid_mapping(config: object) -> dict[str, object]:
 
 def get_area_cid_default(config: object) -> object:
     return get_value(config, "AREA_CID_DEFAULT", 10)
+
+
+def clean_duration_value(value: object) -> int:
+    if value in (None, "", 0, "0"):
+        return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if text in ("", "0"):
+            return 0
+        match = re.search(r"(\d+)", text)
+        if match:
+            return int(match.group(1))
+    return 0
 
 
 def build_source_select_sql(config: object) -> tuple[str, list[object], list[str]]:
@@ -235,11 +254,14 @@ def build_insert_sql(config: object) -> tuple[str, list[str]]:
     target_create_time_field = get_value(config, "TARGET_CREATE_TIME_FIELD")
     target_compare_time_field = get_value(config, "TARGET_COMPARE_TIME_FIELD")
     area_target_field = get_value(config, "AREA_TARGET_FIELD", None)
+    duration_target_field = get_value(config, "DURATION_TARGET_FIELD", None)
     cid_target_field = get_value(config, "CID_TARGET_FIELD", "cid")
     target_columns = [target_column for _, target_column in get_sync_column_mapping(config)]
     append_unique(target_columns, cid_target_field)
     if area_target_field:
         append_unique(target_columns, area_target_field)
+    if duration_target_field:
+        append_unique(target_columns, duration_target_field)
     append_unique(target_columns, target_create_time_field)
     append_unique(target_columns, target_compare_time_field)
     placeholders = ", ".join(["%s"] * len(target_columns))
@@ -268,12 +290,15 @@ def build_update_sql(config: object) -> tuple[str, list[str], list[str]]:
     upsert_update_columns = list(get_value(config, "UPSERT_UPDATE_COLUMNS", []))
     target_compare_time_field = get_value(config, "TARGET_COMPARE_TIME_FIELD")
     area_target_field = get_value(config, "AREA_TARGET_FIELD", None)
+    duration_target_field = get_value(config, "DURATION_TARGET_FIELD", None)
     cid_target_field = get_value(config, "CID_TARGET_FIELD", "cid")
     target_columns = [target_column for _, target_column in get_sync_column_mapping(config)]
     update_columns = upsert_update_columns or target_columns
     append_unique(update_columns, cid_target_field)
     if area_target_field:
         append_unique(update_columns, area_target_field)
+    if duration_target_field:
+        append_unique(update_columns, duration_target_field)
     append_unique(update_columns, target_compare_time_field)
     set_sql = ", ".join(f"{quote_ident(column)} = %s" for column in update_columns)
     key_columns = [target_column for _, target_column in get_value(config, "MATCH_COLUMN_MAPPING")]
@@ -337,6 +362,8 @@ def build_write_row(config: object, source_row: dict[str, object]) -> dict[str, 
 
     area_source_field = get_value(config, "AREA_SOURCE_FIELD", None)
     area_target_field = get_value(config, "AREA_TARGET_FIELD", None)
+    duration_source_field = get_value(config, "DURATION_SOURCE_FIELD", None)
+    duration_target_field = get_value(config, "DURATION_TARGET_FIELD", None)
     cid_target_field = get_value(config, "CID_TARGET_FIELD", "cid")
     area_cid_mapping = get_area_cid_mapping(config)
     area_cid_default = get_area_cid_default(config)
@@ -348,6 +375,9 @@ def build_write_row(config: object, source_row: dict[str, object]) -> dict[str, 
         area_value = clean_area_value(cleaned_row.get(area_source_field))
         write_row[area_target_field] = area_value
         write_row[cid_target_field] = area_cid_mapping.get(area_value, area_cid_default)
+
+    if duration_source_field and duration_target_field:
+        write_row[duration_target_field] = clean_duration_value(cleaned_row.get(duration_source_field))
 
     generated_time = normalize_timestamp(cleaned_row[source_compare_time_field])
     write_row[target_create_time_field] = generated_time

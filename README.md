@@ -120,6 +120,12 @@ Field notes:
   - the cleaned `area` is then used to resolve `cid`
 - `cid` is derived from `AREA_CID_MAPPING` and does not need to be listed in
   `MATCH_COLUMN_MAPPING`.
+- `v_duration` is appended automatically from `DURATION_SOURCE_FIELD` /
+  `DURATION_TARGET_FIELD` in `db_config.py`.
+- `v_duration` is cleaned before writing:
+  - `52分钟` becomes `52`
+  - empty values or `0` become `0`
+- `long` does not need to be listed in `MATCH_COLUMN_MAPPING`.
 - Why there are multiple time fields:
   - `create_time` is usually the original creation timestamp
   - `change_time` is usually the last modified timestamp

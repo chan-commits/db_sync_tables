@@ -112,6 +112,12 @@ SLEEP_SECONDS = 5
   - `中国,澳大利亚` 会变成 `中国`
   - 清洗后的 `area` 会继续用于计算 `cid`
 - `cid` 由 `AREA_CID_MAPPING` 生成，不需要写入 `MATCH_COLUMN_MAPPING`。
+- `v_duration` 会通过 `db_config.py` 末尾的 `DURATION_SOURCE_FIELD` /
+  `DURATION_TARGET_FIELD` 自动追加到写入 SQL。
+- `v_duration` 在写入前会先清洗：
+  - `52分钟` 会变成 `52`
+  - 空值或 `0` 会变成 `0`
+- `long` 不需要写入 `MATCH_COLUMN_MAPPING`。
 - 为什么会有多个 TIME_FIELD：
   - `create_time` 通常表示创建时间
   - `change_time` 通常表示最后更新时间

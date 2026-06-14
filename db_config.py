@@ -128,3 +128,9 @@ AREA_CID_MAPPING = {
     "韩国": 9,
 }
 AREA_CID_DEFAULT = 10
+
+# Duration mapping.
+# Source values like "52分钟" will be cleaned to 52 before writing.
+# Empty values or zero values will become 0.
+DURATION_SOURCE_FIELD = "v_duration"
+DURATION_TARGET_FIELD = "long"
