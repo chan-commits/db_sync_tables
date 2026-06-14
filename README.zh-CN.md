@@ -112,7 +112,9 @@ SLEEP_SECONDS = 5
   `AREA_TARGET_FIELD` 自动追加到写入 SQL。
 - `area` 在写入前会先清洗：
   - `中国,澳大利亚` 会变成 `中国`
+  - 空值或缺失值会写成空字符串，不会写成 `NULL`
   - 清洗后的 `area` 会继续用于计算 `cid`
+  - 如果清洗后的 `area` 为空，这一行会直接跳过
 - `cid` 由 `AREA_CID_MAPPING` 生成，不需要写入 `MATCH_COLUMN_MAPPING`。
 - `v_duration` 会通过 `db_config.py` 末尾的 `DURATION_SOURCE_FIELD` /
   `DURATION_TARGET_FIELD` 自动追加到写入 SQL。
@@ -134,6 +136,9 @@ SLEEP_SECONDS = 5
 - `UPSERT_UPDATE_COLUMNS`：限制 upsert 时实际刷新的字段。
 - `BATCH_SIZE` 默认 `5`。
 - `SLEEP_SECONDS` 默认 `5`。
+- 每条处理结果都会打印决策日志，例如：
+  - `processed=1 inserted=0 updated=0 skipped=1`
+  - `[ROW] action=skip reason=target_time_newer_or_equal ...`
 - 如果你只想依赖自己的 `EXTRA_WHERE_SQL`，就把 `TIME_FILTER_MODE`、
   `TIME_START`、`TIME_END` 都设为 `None`。
 

@@ -351,12 +351,16 @@ def clean_source_row(source_row: dict[str, object]) -> dict[str, object]:
 
 
 def clean_area_value(value: object) -> object:
+    if value is None:
+        return ""
+    if value in ("", 0, "0"):
+        return ""
     if not isinstance(value, str):
-        return value
+        return str(value)
 
     text = value.strip().strip('"').strip("'")
     if not text:
-        return text
+        return ""
 
     if "," in text:
         text = text.split(",", 1)[0]
@@ -392,6 +396,21 @@ def build_write_row(config: object, source_row: dict[str, object]) -> dict[str, 
     write_row[target_compare_time_field] = generated_time
 
     return write_row
+
+
+def format_row_context(match_mapping: list[tuple[str, str]], row: dict[str, object]) -> str:
+    context = {}
+    for source_column, target_column in match_mapping:
+        context[target_column] = row.get(source_column)
+    return repr(context)
+
+
+def should_skip_empty_area(config: object, source_row: dict[str, object]) -> bool:
+    area_source_field = get_value(config, "AREA_SOURCE_FIELD", None)
+    area_target_field = get_value(config, "AREA_TARGET_FIELD", None)
+    if not area_source_field or not area_target_field:
+        return False
+    return clean_area_value(source_row.get(area_source_field)) == ""
 
 
 def should_sync(source_time: object, target_time: object) -> bool:
@@ -469,6 +488,15 @@ def process_row(
     cleaned_row = clean_source_row(source_row)
     match_mapping = list(get_value(config, "MATCH_COLUMN_MAPPING"))
     match_source_by_target = {target_column: source_column for source_column, target_column in match_mapping}
+    row_context = format_row_context(match_mapping, cleaned_row)
+
+    if should_skip_empty_area(config, cleaned_row):
+        print(
+            f"[ROW] action=skip reason=empty_area "
+            f"match={row_context} area_field={get_value(config, 'AREA_SOURCE_FIELD', None)!r}"
+        )
+        return "skip"
+
     lookup_params = tuple(cleaned_row[match_source_by_target[column]] for column in lookup_columns)
     target_cursor.execute(lookup_sql, lookup_params)
     target_row = target_cursor.fetchone()
@@ -478,6 +506,10 @@ def process_row(
     source_time = cleaned_row[source_compare_time_field]
     target_time = target_row[target_compare_time_field] if target_row else None
     if not should_sync(source_time, target_time):
+        print(
+            f"[ROW] action=skip reason=target_time_newer_or_equal "
+            f"match={row_context} source_time={source_time!r} target_time={target_time!r}"
+        )
         return "skip"
 
     use_upsert = bool(get_value(config, "USE_UPSERT"))
@@ -486,16 +518,28 @@ def process_row(
 
     if target_row is None:
         target_cursor.execute(insert_sql, insert_params)
+        print(
+            f"[ROW] action=insert reason=target_row_missing "
+            f"match={row_context} source_time={source_time!r} target_time={target_time!r}"
+        )
         return "insert"
 
     if use_upsert:
         target_cursor.execute(insert_sql, insert_params)
+        print(
+            f"[ROW] action=upsert reason=target_row_exists_and_is_outdated "
+            f"match={row_context} source_time={source_time!r} target_time={target_time!r}"
+        )
         return "upsert"
 
     update_params = tuple(write_row[column] for column in update_columns) + tuple(
         cleaned_row[match_source_by_target[column]] for column in update_keys
     )
     target_cursor.execute(update_sql, update_params)
+    print(
+        f"[ROW] action=update reason=target_row_exists_and_is_outdated "
+        f"match={row_context} source_time={source_time!r} target_time={target_time!r}"
+    )
     return "update"
 
 

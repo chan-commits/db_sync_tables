@@ -119,7 +119,9 @@ Field notes:
   `AREA_TARGET_FIELD` in `db_config.py`.
 - `area` is cleaned before writing:
   - `中国,澳大利亚` becomes `中国`
+  - empty or missing values become an empty string, not `NULL`
   - the cleaned `area` is then used to resolve `cid`
+  - if the cleaned `area` is empty, that row is skipped
 - `cid` is derived from `AREA_CID_MAPPING` and does not need to be listed in
   `MATCH_COLUMN_MAPPING`.
 - `v_duration` is appended automatically from `DURATION_SOURCE_FIELD` /
@@ -145,6 +147,9 @@ Field notes:
 - `UPSERT_UPDATE_COLUMNS` limits which columns are refreshed during upsert.
 - `BATCH_SIZE` defaults to `5`.
 - `SLEEP_SECONDS` defaults to `5`.
+- Each processed row prints a decision log such as:
+  - `processed=1 inserted=0 updated=0 skipped=1`
+  - `[ROW] action=skip reason=target_time_newer_or_equal ...`
 - If you want to rely only on your own `EXTRA_WHERE_SQL`, set `TIME_FILTER_MODE`,
   `TIME_START`, and `TIME_END` to `None`.
 
