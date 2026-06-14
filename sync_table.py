@@ -25,7 +25,7 @@ _MISSING = object()
 GURL_FIELD = "Gurl"
 
 # Source cleanup patterns for GURL_FIELD.
-GURL_CLEAR_VALUE = "1^1$"
+GURL_CLEAR_PATTERN = re.compile(r"^1\^.*\$$")
 GURL_NEWLINE_PATTERN = re.compile(r"^#(\d{1,4})\^(\d{1,4})\$$")
 
 
@@ -275,7 +275,7 @@ def normalize_timestamp(value: object) -> object:
 def clean_gurl_value(value: object) -> object:
     if not isinstance(value, str):
         return value
-    if value == GURL_CLEAR_VALUE:
+    if GURL_CLEAR_PATTERN.fullmatch(value):
         return ""
     if GURL_NEWLINE_PATTERN.fullmatch(value):
         return "\n"
