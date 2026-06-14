@@ -110,3 +110,20 @@ BATCH_SIZE = 5
 
 # Sleep interval between batches, in seconds.
 SLEEP_SECONDS = 5
+
+# Area mapping.
+# These values are appended to the end of the sync SQL automatically.
+AREA_SOURCE_FIELD = "v_area"
+AREA_TARGET_FIELD = "area"
+
+# CID is derived from the cleaned area value.
+# Example:
+# AREA_CID_MAPPING = {
+#     "中国": 8,
+#     "韩国": 9,
+# }
+CID_TARGET_FIELD = "cid"
+AREA_CID_MAPPING = {
+    "中国": 8,
+    "韩国": 9,
+}

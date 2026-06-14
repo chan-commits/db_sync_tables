@@ -91,6 +91,8 @@ Field notes:
 - `MATCH_COLUMN_MAPPING` defines how a source row matches a target row.
   If the column names are the same on both sides, write them the same way,
   for example `("id", "id")`.
+- `AREA_SOURCE_FIELD` / `AREA_TARGET_FIELD` define the source-to-target area
+  mapping, and `AREA_CID_MAPPING` defines the derived cid lookup.
 - Sync decision:
   - if the target row does not exist, insert it
   - if the target row exists and the target timestamp is older than the
@@ -109,6 +111,13 @@ Field notes:
 - `Gurl` is a fixed cleanup field in `sync_table.py`:
   - any string that starts with `1^...$` becomes empty string
   - `#2^2$`, `#19^19$`, `#28^28$`, etc. become `\n`
+- `area` is appended automatically from `AREA_SOURCE_FIELD` /
+  `AREA_TARGET_FIELD` in `db_config.py`.
+- `area` is cleaned before writing:
+  - `中国,澳大利亚` becomes `中国`
+  - the cleaned `area` is then used to resolve `cid`
+- `cid` is derived from `AREA_CID_MAPPING` and does not need to be listed in
+  `MATCH_COLUMN_MAPPING`.
 - Why there are multiple time fields:
   - `create_time` is usually the original creation timestamp
   - `change_time` is usually the last modified timestamp

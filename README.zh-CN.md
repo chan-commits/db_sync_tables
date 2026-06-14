@@ -90,6 +90,8 @@ SLEEP_SECONDS = 5
 - `COLUMN_MAPPING`：从源表同步到目标表的字段映射。
 - `MATCH_COLUMN_MAPPING`：用于判断同一条记录的匹配字段。
   如果源表和目标表字段名一样，直接写成相同的配对，例如 `("id", "id")`。
+- `AREA_SOURCE_FIELD` / `AREA_TARGET_FIELD`：area 的源字段和目标字段。
+- `AREA_CID_MAPPING`：根据清洗后的 area 推导 cid 的映射表。
 - 同步判定流程：
   - 如果目标表没有这条记录，直接插入
   - 如果目标表有这条记录，并且目标时间戳小于源时间戳，执行更新
@@ -102,6 +104,12 @@ SLEEP_SECONDS = 5
 - `Gurl` 是 `sync_table.py` 里的固定清洗字段：
   - 任何以 `1^...$` 开头的字符串都会被替换为空字符串
   - `#2^2$`、`#19^19$`、`#28^28$` 等会被替换为 `\n`
+- `area` 会通过 `db_config.py` 末尾的 `AREA_SOURCE_FIELD` /
+  `AREA_TARGET_FIELD` 自动追加到写入 SQL。
+- `area` 在写入前会先清洗：
+  - `中国,澳大利亚` 会变成 `中国`
+  - 清洗后的 `area` 会继续用于计算 `cid`
+- `cid` 由 `AREA_CID_MAPPING` 生成，不需要写入 `MATCH_COLUMN_MAPPING`。
 - 为什么会有多个 TIME_FIELD：
   - `create_time` 通常表示创建时间
   - `change_time` 通常表示最后更新时间
