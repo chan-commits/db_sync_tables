@@ -405,6 +405,20 @@ def format_row_context(match_mapping: list[tuple[str, str]], row: dict[str, obje
     return repr(context)
 
 
+def format_area_debug(config: object, source_row: dict[str, object]) -> str:
+    area_source_field = get_value(config, "AREA_SOURCE_FIELD", None)
+    area_target_field = get_value(config, "AREA_TARGET_FIELD", None)
+    if not area_source_field or not area_target_field:
+        return ""
+
+    raw_value = source_row.get(area_source_field)
+    cleaned_value = clean_area_value(raw_value)
+    return (
+        f" area_source={area_source_field!r} raw_area={raw_value!r}"
+        f" cleaned_area={cleaned_value!r} area_target={area_target_field!r}"
+    )
+
+
 def should_skip_empty_area(config: object, source_row: dict[str, object]) -> bool:
     area_source_field = get_value(config, "AREA_SOURCE_FIELD", None)
     area_target_field = get_value(config, "AREA_TARGET_FIELD", None)
@@ -493,7 +507,8 @@ def process_row(
     if should_skip_empty_area(config, cleaned_row):
         print(
             f"[ROW] action=skip reason=empty_area "
-            f"match={row_context} area_field={get_value(config, 'AREA_SOURCE_FIELD', None)!r}"
+            f"match={row_context}"
+            f"{format_area_debug(config, cleaned_row)}"
         )
         return "skip"
 
@@ -508,7 +523,9 @@ def process_row(
     if not should_sync(source_time, target_time):
         print(
             f"[ROW] action=skip reason=target_time_newer_or_equal "
-            f"match={row_context} source_time={source_time!r} target_time={target_time!r}"
+            f"match={row_context}"
+            f"{format_area_debug(config, cleaned_row)}"
+            f" source_time={source_time!r} target_time={target_time!r}"
         )
         return "skip"
 
@@ -520,7 +537,9 @@ def process_row(
         target_cursor.execute(insert_sql, insert_params)
         print(
             f"[ROW] action=insert reason=target_row_missing "
-            f"match={row_context} source_time={source_time!r} target_time={target_time!r}"
+            f"match={row_context}"
+            f"{format_area_debug(config, cleaned_row)}"
+            f" source_time={source_time!r} target_time={target_time!r}"
         )
         return "insert"
 
@@ -528,7 +547,9 @@ def process_row(
         target_cursor.execute(insert_sql, insert_params)
         print(
             f"[ROW] action=upsert reason=target_row_exists_and_is_outdated "
-            f"match={row_context} source_time={source_time!r} target_time={target_time!r}"
+            f"match={row_context}"
+            f"{format_area_debug(config, cleaned_row)}"
+            f" source_time={source_time!r} target_time={target_time!r}"
         )
         return "upsert"
 
@@ -538,7 +559,9 @@ def process_row(
     target_cursor.execute(update_sql, update_params)
     print(
         f"[ROW] action=update reason=target_row_exists_and_is_outdated "
-        f"match={row_context} source_time={source_time!r} target_time={target_time!r}"
+        f"match={row_context}"
+        f"{format_area_debug(config, cleaned_row)}"
+        f" source_time={source_time!r} target_time={target_time!r}"
     )
     return "update"
 
